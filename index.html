@@ -16,6 +16,7 @@
 <div id="root"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
@@ -189,18 +190,23 @@ const sT=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(nul
 useEffect(()=>{document.documentElement.dir=rtl?"rtl":"ltr";document.documentElement.lang=lang},[lang,rtl]);
 
 useEffect(()=>{
-  const ref=db.ref("familyData");
-  db.ref(".info/connected").on("value",s=>setConn(!!s.val()));
-  ref.on("value",s=>{
-    const d=s.val();
-    if(d&&d.setupDone){
-      const p={...d,members:d.members?Object.values(d.members):[],expenses:d.expenses?Object.values(d.expenses):[],subscriptions:d.subscriptions?Object.values(d.subscriptions):[]};
-      setSt(p);
-      if(ld){const l=JSON.parse(localStorage.getItem("ff-login")||"null");if(l?.type==="admin")setScr("admin");else if(l?.type==="member"){const m=p.members.find(x=>x.id===l.id);if(m){setMe(m);setScr("member")}}}
-    }else{setSt(null);setScr("setup")}
-    setLd(false);
+  let dbRef;
+  const connRef=db.ref(".info/connected");
+  connRef.on("value",s=>setConn(!!s.val()));
+  const authUnsub=firebase.auth().onAuthStateChanged(user=>{
+    if(!user){firebase.auth().signInAnonymously().catch(e=>console.error("Auth failed",e));return;}
+    dbRef=db.ref("familyData");
+    dbRef.on("value",s=>{
+      const d=s.val();
+      if(d&&d.setupDone){
+        const p={...d,members:d.members?Object.values(d.members):[],expenses:d.expenses?Object.values(d.expenses):[],subscriptions:d.subscriptions?Object.values(d.subscriptions):[]};
+        setSt(p);
+        if(ld){const l=JSON.parse(localStorage.getItem("ff-login")||"null");if(l?.type==="admin")setScr("admin");else if(l?.type==="member"){const m=p.members.find(x=>x.id===l.id);if(m){setMe(m);setScr("member")}}}
+      }else{setSt(null);setScr("setup")}
+      setLd(false);
+    });
   });
-  return()=>ref.off();
+  return()=>{authUnsub();connRef.off();if(dbRef)dbRef.off();};
 },[]);
 
 useEffect(()=>{if(me&&st?.members){const u=st.members.find(m=>m.id===me.id);if(u)setMe(u)}},[st]);
